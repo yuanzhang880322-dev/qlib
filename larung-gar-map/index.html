@@ -46,7 +46,7 @@
   #stage{position:fixed;inset:0;opacity:0;transition:opacity 1.6s ease .3s;}
   #stage.show{opacity:1;}
   .paper{
-    position:absolute;inset:0;
+    position:absolute;inset:0;z-index:0;
     background:
       radial-gradient(ellipse at 30% 20%, rgba(255,240,200,.5), transparent 60%),
       radial-gradient(ellipse at 80% 90%, rgba(120,80,30,.4), transparent 55%),
@@ -71,7 +71,7 @@
   header.title .rule{height:2px;width:min(520px,80%);margin:8px auto 0;
     background:linear-gradient(90deg,transparent,var(--ink-soft),transparent);}
 
-  svg#map{width:100%;height:100%;display:block;cursor:grab;}
+  svg#map{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;z-index:1;}
   svg#map:active{cursor:grabbing;}
 
   /* hill / valley shapes */
