@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>喇荣五明佛学院 · 活点地图</title>
+<style>
+  :root{
+    --ink:#3a2410;
+    --ink-soft:#5a3a1c;
+    --parch:#e9d8b0;
+    --parch-dark:#d8c290;
+    --red:#9e2b1e;
+    --gold:#b08440;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:"Songti SC","SimSun","Noto Serif SC",serif;
+    color:var(--ink);
+    background:#1c140c;
+    overflow:hidden;
+  }
+
+  /* ---------- Intro / oath screen ---------- */
+  #oath{
+    position:fixed;inset:0;z-index:50;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;gap:26px;
+    background:radial-gradient(circle at 50% 40%, #2a1d10, #120c06 80%);
+    transition:opacity 1.2s ease;
+  }
+  #oath h1{font-size:clamp(28px,5vw,52px);color:var(--gold);letter-spacing:.18em;text-shadow:0 0 18px rgba(176,132,64,.5);}
+  #oath p{color:#c9b07e;max-width:560px;line-height:1.9;font-size:clamp(14px,2vw,18px);opacity:.85;}
+  #oathBtn{
+    cursor:pointer;font-family:inherit;font-size:18px;letter-spacing:.12em;
+    color:#1c140c;background:linear-gradient(#e9d8b0,#c9ad74);
+    border:2px solid #8a6a2e;padding:14px 30px;border-radius:6px;
+    box-shadow:0 6px 24px rgba(0,0,0,.5);transition:transform .2s,box-shadow .2s;
+  }
+  #oathBtn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(176,132,64,.4);}
+  .quill{font-size:34px;animation:float 3s ease-in-out infinite;}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+
+  /* ---------- Map stage ---------- */
+  #stage{position:fixed;inset:0;opacity:0;transition:opacity 1.6s ease .3s;}
+  #stage.show{opacity:1;}
+  .paper{
+    position:absolute;inset:0;z-index:0;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(255,240,200,.5), transparent 60%),
+      radial-gradient(ellipse at 80% 90%, rgba(120,80,30,.4), transparent 55%),
+      linear-gradient(135deg,#e9d8b0,#d2b986 60%,#c2a778);
+  }
+  /* aged stains + edges */
+  .paper::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:
+      radial-gradient(circle at 12% 84%, rgba(90,58,28,.35), transparent 9%),
+      radial-gradient(circle at 90% 16%, rgba(90,58,28,.30), transparent 8%),
+      radial-gradient(circle at 60% 50%, rgba(90,58,28,.10), transparent 40%);
+    box-shadow:inset 0 0 160px 40px rgba(60,36,16,.55);
+  }
+
+  header.title{
+    position:absolute;top:18px;left:50%;transform:translateX(-50%);
+    text-align:center;z-index:6;pointer-events:none;width:92%;
+  }
+  header.title h2{font-size:clamp(20px,3.4vw,34px);color:var(--ink);letter-spacing:.14em;}
+  header.title small{display:block;color:var(--ink-soft);letter-spacing:.3em;margin-top:4px;font-size:clamp(10px,1.6vw,13px);}
+  header.title .rule{height:2px;width:min(520px,80%);margin:8px auto 0;
+    background:linear-gradient(90deg,transparent,var(--ink-soft),transparent);}
+
+  svg#map{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;z-index:1;}
+  svg#map:active{cursor:grabbing;}
+
+  /* hill / valley shapes */
+  .ridge{fill:none;stroke:var(--ink-soft);stroke-width:1.4;opacity:.55;}
+  .valley{fill:rgba(180,150,100,.25);stroke:var(--ink-soft);stroke-width:1.5;opacity:.6;}
+  .river{fill:none;stroke:#5a7a8a;stroke-width:3;opacity:.55;stroke-linecap:round;}
+  .road{fill:none;stroke:var(--ink-soft);stroke-width:2;stroke-dasharray:2 6;opacity:.7;stroke-linecap:round;}
+
+  /* the famous red houses field */
+  .house{fill:var(--red);opacity:.85;stroke:#5a160f;stroke-width:.4;}
+  .house.alt{fill:#b6402f;}
+
+  /* landmark markers */
+  .lm{cursor:pointer;}
+  .lm .dot{fill:var(--gold);stroke:var(--ink);stroke-width:1.5;transition:r .2s, fill .2s;}
+  .lm:hover .dot{fill:var(--red);r:11;}
+  .lm .ring{fill:none;stroke:var(--red);stroke-width:1.5;opacity:0;}
+  .lm.active .ring{opacity:.9;animation:pulse 1.6s ease-out infinite;}
+  @keyframes pulse{0%{r:10;opacity:.9}100%{r:30;opacity:0}}
+  .lm text{font-size:13px;fill:var(--ink);paint-order:stroke;stroke:var(--parch);stroke-width:3px;font-weight:600;}
+
+  /* walking footprints (the "live" part) */
+  .foot{fill:var(--ink);opacity:0;}
+
+  /* compass */
+  .compass{opacity:.7;}
+  .compass text{fill:var(--ink);font-size:14px;font-weight:700;}
+
+  /* ---------- info panel ---------- */
+  #panel{
+    position:absolute;top:0;right:0;height:100%;width:min(360px,86vw);
+    background:linear-gradient(180deg,#efe0bd,#dcc491);
+    border-left:3px solid #8a6a2e;box-shadow:-12px 0 40px rgba(0,0,0,.4);
+    transform:translateX(105%);transition:transform .45s cubic-bezier(.6,.05,.2,1);
+    z-index:8;padding:26px 24px;overflow-y:auto;
+  }
+  #panel.open{transform:translateX(0);}
+  #panel h3{font-size:24px;color:var(--red);letter-spacing:.08em;margin-bottom:2px;}
+  #panel .tib{color:var(--ink-soft);font-size:13px;letter-spacing:.1em;margin-bottom:14px;}
+  #panel .tag{display:inline-block;background:var(--gold);color:#1c140c;font-size:11px;
+    padding:3px 10px;border-radius:20px;margin-bottom:14px;letter-spacing:.1em;}
+  #panel p{line-height:1.95;font-size:15px;color:var(--ink);}
+  #panel .coord{margin-top:18px;font-size:12px;color:var(--ink-soft);letter-spacing:.05em;border-top:1px dashed var(--ink-soft);padding-top:12px;}
+  #closeP{position:absolute;top:14px;right:16px;cursor:pointer;font-size:22px;color:var(--ink-soft);background:none;border:none;}
+  #closeP:hover{color:var(--red);}
+
+  /* legend / controls */
+  .controls{position:absolute;left:16px;bottom:16px;z-index:6;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .controls button{
+    font-family:inherit;cursor:pointer;background:rgba(233,216,176,.85);
+    border:1.5px solid #8a6a2e;color:var(--ink);border-radius:5px;
+    padding:8px 12px;font-size:13px;letter-spacing:.06em;transition:background .2s;
+  }
+  .controls button:hover{background:#e9d8b0;}
+  .legend{position:absolute;right:16px;bottom:16px;z-index:6;
+    background:rgba(233,216,176,.8);border:1.5px solid #8a6a2e;border-radius:6px;
+    padding:10px 14px;font-size:12px;color:var(--ink);line-height:1.8;letter-spacing:.04em;}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:middle;}
+
+  .hint{position:absolute;top:90px;left:50%;transform:translateX(-50%);z-index:6;
+    color:var(--ink-soft);font-size:13px;letter-spacing:.12em;opacity:.85;pointer-events:none;}
+</style>
+</head>
+<body>
+
+  <!-- ===== Oath screen ===== -->
+  <section id="oath">
+    <div class="quill">🪶</div>
+    <h1>喇荣五明佛学院 · 活点地图</h1>
+    <p>“我庄严宣誓，我没安好心。”<br>
+       一座藏地佛学院的羊皮卷地图，山谷里布满绛红色的小木屋。<br>
+       念出咒语，让红房子、转经道与朝圣的脚印浮现。</p>
+    <button id="oathBtn">I solemnly swear I am up to no good ✦ 展开地图</button>
+  </section>
+
+  <!-- ===== Map stage ===== -->
+  <main id="stage">
+    <div class="paper"></div>
+
+    <header class="title">
+      <h2>喇 榮 五 明 佛 學 院</h2>
+      <small>LARUNG GAR · 四川 · 色达 · 海拔 ~3700m</small>
+      <div class="rule"></div>
+    </header>
+
+    <div class="hint">轻点金色标记，查看圣地 · 拖拽平移 · 滚轮缩放</div>
+
+    <svg id="map" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet">
+      <g id="world">
+        <!-- valley basin -->
+        <path class="valley" d="M120,360 C220,250 360,210 500,220 C660,232 800,270 900,360
+                                 C840,470 700,540 520,548 C340,556 200,500 120,360 Z"/>
+
+        <!-- surrounding ridges (sacred mountains) -->
+        <path class="ridge" d="M70,330 C180,200 320,150 500,160 C690,170 840,220 940,340"/>
+        <path class="ridge" d="M95,360 C210,250 360,205 500,210 C660,215 810,260 915,360"/>
+        <path class="ridge" d="M150,470 C300,560 520,580 700,540 C800,520 870,470 905,420"/>
+
+        <!-- river through the valley -->
+        <path class="river" d="M150,400 C300,440 430,420 560,455 C690,490 800,470 880,500"/>
+
+        <!-- main pilgrimage road -->
+        <path class="road" d="M120,520 C260,470 360,420 470,400 C560,384 640,360 720,300"/>
+        <path class="road" d="M470,400 C480,350 500,300 520,250"/>
+
+        <!-- ===== field of red houses (generated) ===== -->
+        <g id="houses"></g>
+
+        <!-- ===== walking footprints path (the 'live' bit) ===== -->
+        <g id="prints"></g>
+
+        <!-- ===== landmarks ===== -->
+        <g id="landmarks"></g>
+
+        <!-- compass rose -->
+        <g class="compass" transform="translate(880,140)">
+          <circle r="34" fill="none" stroke="var(--ink-soft)" stroke-width="1.5"/>
+          <path d="M0,-40 L7,0 L0,40 L-7,0 Z" fill="var(--red)" opacity=".8"/>
+          <path d="M-40,0 L0,7 L40,0 L0,-7 Z" fill="var(--ink-soft)" opacity=".6"/>
+          <text x="-5" y="-44">N</text>
+          <text x="-5" y="56">S</text>
+        </g>
+      </g>
+    </svg>
+
+    <div class="controls">
+      <button id="zoomIn">＋ 放大</button>
+      <button id="zoomOut">－ 缩小</button>
+      <button id="reset">⟳ 复位</button>
+      <button id="mischief">🪄 恶作剧完成（隐藏）</button>
+    </div>
+
+    <div class="legend">
+      <div><i style="background:#9e2b1e"></i>觉姆/扎巴红房子</div>
+      <div><i style="background:#b08440"></i>圣地标记</div>
+      <div><i style="background:#5a7a8a"></i>溪流</div>
+    </div>
+
+    <!-- info panel -->
+    <aside id="panel">
+      <button id="closeP">✕</button>
+      <span class="tag" id="pTag">圣地</span>
+      <h3 id="pName">—</h3>
+      <div class="tib" id="pTib">—</div>
+      <p id="pDesc">—</p>
+      <div class="coord" id="pCoord">—</div>
+    </aside>
+  </main>
+
+<script>
+/* ======================================================================
+   喇荣五明佛学院 · 活点地图  (Larung Gar — Marauder's Map style)
+   Self-contained, no external dependencies. Hand-drawn SVG.
+   Geographic anchor: Larung Gar, Sertar County, Garze, Sichuan, China
+   ~ 31.999°N, 100.345°E, elevation ~3700m
+   ====================================================================== */
+
+const SVGNS = "http://www.w3.org/2000/svg";
+const el = (id) => document.getElementById(id);
+
+/* ---------- 1. Landmark data ---------- */
+const LANDMARKS = [
+  { x:500, y:300, name:"坛城 / 转经道", tib:"Mandala · Kora", tag:"转经",
+    desc:"金顶坛城（时轮金刚坛城）是学院的中心地标。信众日夜绕行转经，三层结构内外皆可巡礼，是整座山谷精神能量的圆心。",
+    coord:"约 31.998°N, 100.344°E" },
+  { x:470, y:400, name:"大经堂", tib:"Main Assembly Hall", tag:"闻法",
+    desc:"全院僧众集中闻思修学之处，可容纳上万人共修。每逢大法会，绛红色海洋汇聚于此，诵经声响彻山谷。",
+    coord:"约 31.997°N, 100.343°E" },
+  { x:330, y:330, name:"觉姆经堂区", tib:"Nuns' Quarter", tag:"觉姆",
+    desc:"山谷西侧密布的红房子多为觉姆（女众出家人）的居所与经堂。喇荣是世界上女众修行者最集中的道场之一。",
+    coord:"约 31.999°N, 100.340°E" },
+  { x:640, y:300, name:"扎巴僧舍区", tib:"Monks' Quarter", tag:"扎巴",
+    desc:"东侧山坡是扎巴（男众僧人）的木屋群。一间间巴掌大的红房子依山而建，层层叠叠，构成喇荣最震撼的视觉景观。",
+    coord:"约 31.999°N, 100.348°E" },
+  { x:520, y:250, name:"法王晋美彭措灵塔", tib:"Khenpo Jigme Phuntsok Stupa", tag:"纪念",
+    desc:"纪念学院创建者法王晋美彭措仁波切。他于1980年在这片山谷创建喇荣，使其从几间小屋发展为闻名世界的佛学院。",
+    coord:"约 31.996°N, 100.345°E" },
+  { x:720, y:300, name:"坛城观景台", tib:"Hilltop Viewpoint", tag:"观景",
+    desc:"东侧山顶的观景平台，可俯瞰整个山谷连绵不绝的红房子海洋——晨雾与暮色中，是摄影者心中的圣地。",
+    coord:"约 32.001°N, 100.350°E" },
+  { x:250, y:470, name:"学院大门", tib:"Main Gate", tag:"入口",
+    desc:"沿色达县城方向进山的入口。海拔渐升，绛红色的屋宇在转过一道山弯后骤然展开于眼前。",
+    coord:"约 31.995°N, 100.338°E" },
+  { x:600, y:470, name:"坛城下溪谷", tib:"Valley Creek", tag:"山水",
+    desc:"一条小溪贯穿谷底，滋养着山谷。沿溪是连接各区的主要步道，朝圣者每日往返其间。",
+    coord:"约 31.997°N, 100.347°E" },
+];
+
+/* ---------- 2. Build the field of red houses ---------- */
+(function buildHouses(){
+  const g = el("houses");
+  // cluster centers (roughly hugging the hillsides around the mandala)
+  const clusters = [
+    {cx:340,cy:330,r:120,n:170}, {cx:620,cy:310,r:130,n:190},
+    {cx:480,cy:380,r:90,n:90},  {cx:430,cy:300,r:80,n:80},
+    {cx:560,cy:430,r:70,n:60},  {cx:300,cy:420,r:60,n:55},
+  ];
+  let seed = 7;
+  const rnd = ()=>{ seed=(seed*9301+49297)%233280; return seed/233280; };
+  clusters.forEach(c=>{
+    for(let i=0;i<c.n;i++){
+      const a = rnd()*Math.PI*2;
+      const d = Math.sqrt(rnd())*c.r;
+      const x = c.cx + Math.cos(a)*d;
+      const y = c.cy + Math.sin(a)*d*0.7;   // squash vertically -> terraced look
+      const s = 4 + rnd()*3;
+      const r = document.createElementNS(SVGNS,"rect");
+      r.setAttribute("x",(x-s/2).toFixed(1));
+      r.setAttribute("y",(y-s/2).toFixed(1));
+      r.setAttribute("width",s.toFixed(1));
+      r.setAttribute("height",(s*0.8).toFixed(1));
+      r.setAttribute("transform",`rotate(${(rnd()*18-9).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})`);
+      r.setAttribute("class", rnd()>0.6 ? "house alt":"house");
+      g.appendChild(r);
+    }
+  });
+})();
+
+/* ---------- 3. Plot landmarks ---------- */
+(function buildLandmarks(){
+  const g = el("landmarks");
+  LANDMARKS.forEach((lm,i)=>{
+    const grp = document.createElementNS(SVGNS,"g");
+    grp.setAttribute("class","lm");
+    grp.setAttribute("transform",`translate(${lm.x},${lm.y})`);
+    grp.dataset.i = i;
+    grp.innerHTML = `
+      <circle class="ring" r="10"></circle>
+      <circle class="dot" r="8"></circle>
+      <text x="13" y="5">${lm.name}</text>`;
+    grp.addEventListener("click",(e)=>{ e.stopPropagation(); openPanel(i,grp); });
+    g.appendChild(grp);
+  });
+})();
+
+/* ---------- 4. Animated footprints around the kora (the "live map") ---------- */
+(function buildPrints(){
+  const g = el("prints");
+  // a looping path around the mandala (the circumambulation route)
+  const cx=500, cy=300, rx=130, ry=95;
+  const N=26;
+  for(let i=0;i<N;i++){
+    const t=i/N*Math.PI*2;
+    const x=cx+Math.cos(t)*rx;
+    const y=cy+Math.sin(t)*ry;
+    const ang=(t*180/Math.PI)+90;
+    const p=document.createElementNS(SVGNS,"path");
+    // little foot shape
+    p.setAttribute("d","M0,0 c-1.6,-3 -1.6,-7 0,-9 c1.6,2 1.6,6 0,9 z");
+    p.setAttribute("class","foot");
+    p.setAttribute("transform",`translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${ang.toFixed(1)}) scale(${i%2?1:-1},1)`);
+    p.style.animation=`stepFade 7s linear ${(i*7/N).toFixed(2)}s infinite`;
+    g.appendChild(p);
+  }
+  // inject keyframes
+  const st=document.createElement("style");
+  st.textContent="@keyframes stepFade{0%{opacity:0}8%{opacity:.85}40%{opacity:.85}70%{opacity:0}100%{opacity:0}}";
+  document.head.appendChild(st);
+})();
+
+/* ---------- 5. Info panel ---------- */
+let activeEl=null;
+function openPanel(i,grp){
+  const lm=LANDMARKS[i];
+  el("pName").textContent=lm.name;
+  el("pTib").textContent=lm.tib;
+  el("pTag").textContent=lm.tag;
+  el("pDesc").textContent=lm.desc;
+  el("pCoord").textContent="📍 "+lm.coord;
+  el("panel").classList.add("open");
+  if(activeEl) activeEl.classList.remove("active");
+  grp.classList.add("active"); activeEl=grp;
+}
+el("closeP").addEventListener("click",()=>{
+  el("panel").classList.remove("open");
+  if(activeEl){activeEl.classList.remove("active");activeEl=null;}
+});
+
+/* ---------- 6. Pan & zoom ---------- */
+const map=el("map"), world=el("world");
+let scale=1, tx=0, ty=0, dragging=false, sx=0, sy=0;
+function apply(){ world.setAttribute("transform",`translate(${tx},${ty}) scale(${scale})`); }
+function zoom(f){ const ns=Math.min(4,Math.max(.6,scale*f));
+  // zoom toward centre
+  tx=500-(500-tx)*(ns/scale); ty=350-(350-ty)*(ns/scale); scale=ns; apply(); }
+el("zoomIn").onclick=()=>zoom(1.25);
+el("zoomOut").onclick=()=>zoom(.8);
+el("reset").onclick=()=>{scale=1;tx=0;ty=0;apply();};
+map.addEventListener("wheel",e=>{e.preventDefault();zoom(e.deltaY<0?1.12:0.9);},{passive:false});
+map.addEventListener("mousedown",e=>{dragging=true;sx=e.clientX-tx;sy=e.clientY-ty;});
+window.addEventListener("mousemove",e=>{if(dragging){tx=e.clientX-sx;ty=e.clientY-sy;apply();}});
+window.addEventListener("mouseup",()=>dragging=false);
+// touch
+map.addEventListener("touchstart",e=>{const t=e.touches[0];dragging=true;sx=t.clientX-tx;sy=t.clientY-ty;},{passive:true});
+map.addEventListener("touchmove",e=>{if(dragging){const t=e.touches[0];tx=t.clientX-sx;ty=t.clientY-sy;apply();}},{passive:true});
+map.addEventListener("touchend",()=>dragging=false);
+
+/* ---------- 7. Oath / mischief ---------- */
+el("oathBtn").addEventListener("click",()=>{
+  el("oath").style.opacity="0";
+  setTimeout(()=>{el("oath").style.display="none";},1100);
+  el("stage").classList.add("show");
+});
+el("mischief").addEventListener("click",()=>{
+  // "Mischief managed" — fade footprints & reset, like wiping the map
+  document.querySelectorAll(".foot").forEach(f=>f.style.animationPlayState=
+    f.style.animationPlayState==="paused"?"running":"paused");
+  el("mischief").textContent =
+    el("mischief").textContent.includes("隐藏") ? "🪄 召唤脚印（显现）" : "🪄 恶作剧完成（隐藏）";
+});
+</script>
+</body>
+</html>
